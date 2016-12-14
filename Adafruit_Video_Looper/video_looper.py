@@ -9,6 +9,7 @@ import sys
 import signal
 import time
 
+import RPi.GPIO as GPIO
 import pygame
 
 from model import Playlist
@@ -147,7 +148,7 @@ class VideoLooper(object):
             font = self._small_font
         return font.render(message, True, self._fgcolor, self._bgcolor)
 
-    def _animate_countdown(self, playlist, seconds=10):
+    def _animate_countdown(self, playlist, seconds=3):
         """Print text with the number of loaded movies and a quick countdown
         message if the on screen display is enabled.
         """
@@ -204,6 +205,7 @@ class VideoLooper(object):
 
     def run(self):
         """Main program loop.  Will never return!"""
+        global go_video_run
         # Get playlist of movies to play from file reader.
         playlist = self._build_playlist()
         self._prepare_to_run_playlist(playlist)
@@ -213,9 +215,14 @@ class VideoLooper(object):
             if not self._player.is_playing():
                 movie = playlist.get_next()
                 if movie is not None:
+                    print('waiting for presence')
+                    GPIO.output(29,GPIO.LOW)
+                    GPIO.wait_for_edge(40, GPIO.RISING)
+                    print('presence detected')
+                    GPIO.output(29,GPIO.input(40))
                     # Start playing the first available movie.
                     self._print('Playing movie: {0}'.format(movie))
-                    self._player.play(movie, loop=playlist.length() == 1, vol = self._sound_vol)
+                    self._player.play(movie, vol = self._sound_vol)
             # Check for changes in the file search path (like USB drives added)
             # and rebuild the playlist.
             if self._reader.is_changed():
@@ -243,6 +250,13 @@ if __name__ == '__main__':
     # Override config path if provided as parameter.
     if len(sys.argv) == 2:
         config_path = sys.argv[1]
+    # Set up gpio.
+    GPIO.setmode(GPIO.BOARD)
+    GPIO.setup(40, GPIO.IN)
+#    GPIO.add_event_detect(40, GPIO.BOTH, callback=callback, bouncetime=2000)
+    
+    GPIO.setup(29, GPIO.OUT)
+    GPIO.output(29,GPIO.LOW)
     # Create video looper.
     videolooper = VideoLooper(config_path)
     # Configure signal handlers to quit on TERM or INT signal.

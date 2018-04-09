@@ -12,6 +12,8 @@ import time
 import RPi.GPIO as GPIO
 import pygame
 
+import OSC
+
 from model import Playlist
 
 
@@ -79,6 +81,9 @@ class VideoLooper(object):
         self._small_font = pygame.font.Font(None, 50)
         self._big_font   = pygame.font.Font(None, 250)
         self._running    = True
+        send_address = '192.168.1.90' , 8808
+        self.c = OSC.OSCClient()
+        self.c.connect(send_address)
 
     def _print(self, message):
         """Print message to standard output if console output is enabled."""
@@ -216,11 +221,17 @@ class VideoLooper(object):
                 movie = playlist.get_next()
                 if movie is not None:
                     print('waiting for presence')
-                    GPIO.output(29,GPIO.LOW)
-                    GPIO.wait_for_edge(40, GPIO.RISING)
-                    print('presence detected')
-                    GPIO.output(29,GPIO.input(40))
-                    # Start playing the first available movie.
+                    GPIO.wait_for_edge(21, GPIO.FALLING)
+                    print('presence detected. play ')
+                    print(movie)
+
+                    msg = OSC.OSCMessage()
+                    msg.setAddress("/print")
+                    msg.append(44)
+                    msg.extend(movie)
+
+                    self.c.send(msg)
+
                     self._print('Playing movie: {0}'.format(movie))
                     self._player.play(movie, vol = self._sound_vol)
             # Check for changes in the file search path (like USB drives added)
@@ -251,12 +262,9 @@ if __name__ == '__main__':
     if len(sys.argv) == 2:
         config_path = sys.argv[1]
     # Set up gpio.
-    GPIO.setmode(GPIO.BOARD)
-    GPIO.setup(40, GPIO.IN)
-#    GPIO.add_event_detect(40, GPIO.BOTH, callback=callback, bouncetime=2000)
-    
-    GPIO.setup(29, GPIO.OUT)
-    GPIO.output(29,GPIO.LOW)
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(21, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
     # Create video looper.
     videolooper = VideoLooper(config_path)
     # Configure signal handlers to quit on TERM or INT signal.
